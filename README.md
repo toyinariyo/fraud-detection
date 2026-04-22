@@ -1,6 +1,6 @@
-# Fraud Detection — End-to-End Classification Pipeline
+# Fraud Detection — Validation-Safe Classification Pipeline
 
-A production-oriented fraud detection system built on the [Kaggle Credit Card Fraud dataset](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud). Designed to reflect real-world financial crime prevention workflows: SQL-backed data access, rigorous imbalance handling, threshold-tuned evaluation, and SHAP-based explainability for regulatory compliance.
+A portfolio fraud detection prototype built on the [Kaggle Credit Card Fraud dataset](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud). The project focuses on realistic model evaluation for rare-event classification: SQL-backed data access, chronological validation, imbalance handling, threshold tuning on validation data, and SHAP-based model interpretation.
 
 ---
 
@@ -10,8 +10,8 @@ A production-oriented fraud detection system built on the [Kaggle Credit Card Fr
 fraud-detection/
 ├── notebooks/
 │   ├── 01_eda.ipynb              # Exploratory analysis & class imbalance
-│   ├── 02_modeling.ipynb         # Model training, SMOTE, PR-curve evaluation
-│   └── 03_explainability.ipynb   # SHAP values, waterfall plots, reason codes
+│   ├── 02_modeling.ipynb         # Time-aware split, model training, validation/test evaluation
+│   └── 03_explainability.ipynb   # SHAP values and honest explanation summaries
 ├── data/                         # SQLite database (generated, not versioned)
 ├── models/                       # Saved model artifacts (generated, not versioned)
 ├── setup_db.py                   # One-time script: CSV → SQLite
@@ -67,44 +67,51 @@ With a 0.17% fraud rate, a classifier that labels everything as legitimate achie
 
 ### Class Imbalance Handling
 
-- **SMOTE** (Synthetic Minority Over-sampling) applied to training data only — never to the test set, which remains at the true 0.17% prevalence to simulate production conditions
-- **`scale_pos_weight`** in XGBoost set to the negative/positive ratio (~577) to penalise missed fraud more heavily
-- **Threshold tuning**: the decision threshold is treated as a business decision, not a statistical default. A cost table (£200 per missed fraud, £5 per blocked legitimate customer) quantifies the trade-off across all operating points
+- **Chronological split**: first 60% of transactions for training, next 20% for validation/model selection, final 20% held out for one final test evaluation
+- **SMOTE** applied to training data only — never to validation or test data
+- **`scale_pos_weight`** in XGBoost set from the training split's negative/positive ratio
+- **Threshold tuning**: the decision threshold is selected on validation data, then frozen before final test evaluation. A cost table (£200 per missed fraud, £5 per blocked legitimate customer) quantifies the trade-off on validation data
 
 ### Models
 
-| Model | PR-AUC | Notes |
+| Model | Validation PR-AUC | Notes |
 |---|---|---|
-| Logistic Regression | 0.74 | Interpretable baseline; suitable for regulatory review |
-| Random Forest | 0.83 | Captures non-linear patterns; robust to outliers |
-| **XGBoost** | **0.88** | Best performance; SHAP-compatible |
+| Logistic Regression | 0.708 | Fast baseline |
+| Random Forest | 0.744 | Non-linear benchmark |
+| **XGBoost** | **0.788** | Selected model; SHAP-compatible |
 
-**XGBoost at optimal threshold (0.74):** Precision 89% · Recall 84% · F1 0.863
+**Final untouched test result, XGBoost at frozen validation threshold (0.954):** Precision 92% · Recall 73% · F1 0.81 · PR-AUC 0.797
 
 ---
 
 ## Explainability
 
-Explainability is a first-class requirement in regulated financial environments. The third notebook provides:
+The third notebook uses SHAP to inspect how the selected model behaves. Because `V1`-`V28` are anonymized PCA components, the project does **not** invent business meanings for them or claim customer-facing decline explanations.
 
-- **Global feature importance** (mean |SHAP|) — which transaction characteristics drive fraud predictions overall
+- **Global feature importance** (mean |SHAP|) — which anonymized features drive predictions overall
 - **Beeswarm plot** — direction and magnitude of each feature's impact across the dataset
-- **Individual waterfall plots** — why a specific transaction was flagged or approved (critical for fraud analyst triage and customer dispute handling)
-- **Dependence plots** — feature interaction analysis, informing rule-based fallback logic
-- **Reason code generator** — prototype converting SHAP values into human-readable decline codes, as required for Suspicious Activity Reports (SARs) and GDPR Article 22 compliance
+- **Individual waterfall plots** — why a specific transaction was flagged or approved
+- **Dependence plots** — feature interaction analysis
+- **Explanation summaries** — compact summaries using actual dataset feature names such as `V14`, `V10`, and `Amount_log`
 
 ---
 
 ## Key Results
 
 ```
-=== XGBoost (threshold=0.74) ===
+=== Final Test: XGBoost (frozen threshold=0.954) ===
               precision    recall  f1-score
   Legitimate       1.00      1.00      1.00
-       Fraud       0.89      0.84      0.86
+       Fraud       0.92      0.73      0.81
 
-PR-AUC : 0.8751
-ROC-AUC: 0.9814
+Test PR-AUC : 0.7967
+Test ROC-AUC: 0.9743
+
+Confusion matrix:
+  Legit approved : 56,882
+  Legit blocked  : 5
+  Fraud missed   : 20
+  Fraud caught   : 55
 ```
 
 ---
