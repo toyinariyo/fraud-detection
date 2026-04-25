@@ -1,4 +1,4 @@
-# Fraud Detection — Validation-Safe Classification Pipeline + LLM-Assisted Review
+# Fraud Detection + LLM-Assisted Investigation Assistant
 
 A portfolio fraud detection prototype built on the [Kaggle Credit Card Fraud dataset](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud). The project focuses on realistic model evaluation for rare-event classification: SQL-backed data access, chronological validation, imbalance handling, threshold tuning on validation data, and SHAP-based model interpretation.
 
